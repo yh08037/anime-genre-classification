@@ -2,10 +2,10 @@
 Predicting Anime Genres using NLP – Multi-Label Classification
 
 ## Dataset: MyAnimeList Database 2020
-[MyAnimeList Database 2020](https://www.kaggle.com/hernan4444/anime-recommendation-database-2020)
+[Kaggle link: Anime Recommendation Database 2020](https://www.kaggle.com/hernan4444/anime-recommendation-database-2020)<br>
+[Github link: MyAnimeList Database 2020](https://github.com/Hernan4444/MyAnimeList-Database)<br>
 
-## Setting Problem
-Multi-Label Classification using NLP
+## Problem: Multi-Label Classification using NLP
 
 |  | Example |
 |---|---|
