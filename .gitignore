@@ -1,0 +1,9 @@
+.vscode
+.ipynb_checkpoints
+html
+html_zip
+stopwords-en.txt
+__pycache__
+*.npy
+*.txt
+*.pkl
