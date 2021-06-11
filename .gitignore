@@ -6,4 +6,3 @@ stopwords-en.txt
 __pycache__
 *.npy
 *.txt
-*.pkl
