@@ -1,6 +1,4 @@
 import sys
-
-import cupyx
 sys.path.append('..')
 from common.np import *
 from common.config import GPU
@@ -146,8 +144,5 @@ class Embedding:
     def backward(self, dout):
         dW, = self.grads
         dW[...] = 0
-        if GPU:
-            cupyx.scatter_add(dW, self.idx, dout)
-        else:
-            np.add.at(dW, self.idx, dout)
+        np.add.at(dW, self.idx, dout)
         return None
