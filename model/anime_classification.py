@@ -23,21 +23,11 @@ import matplotlib.pyplot as plt
 ################################## define functions ##################################
 
 def cross_entropy_error(y, t):
-    if y.ndim == 1:
-        t = t.reshape(1, t.size)
-        y = y.reshape(1, y.size)
-        
-    # 훈련 데이터가 원-핫 벡터라면 정답 레이블의 인덱스로 반환
-    if t.size == y.size:
-        t = t.argmax(axis=1)
-             
-    batch_size = y.shape[0]
-    return -np.sum(np.log(y[np.arange(batch_size), t] + 1e-7)) / batch_size
-
-def binary_cross_entropy_error(y, t):
     assert t.size == y.size
+    return -np.mean(np.sum(t*np.log(y+1e-7), axis=1))
 
-    pass
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))    
 
 def softmax(x):
     if x.ndim == 2:
@@ -48,20 +38,6 @@ def softmax(x):
         x = x - np.max(x)
         x = np.exp(x) / np.sum(np.exp(x))
     return x
-
-# def to_cpu(x):
-#     import numpy
-#     if type(x) == numpy.ndarray:
-#         return x
-#     return np.asnumpy(x)
-
-
-# def to_gpu(x):
-#     import cupy
-#     if type(x) == cupy.ndarray:
-#         return x
-#     return cupy.asarray(x)
-    
 
 
 #################################### define layers ###################################
@@ -89,25 +65,6 @@ class Affine:
         return dx
 
 
-class Relu:
-    def __init__(self):
-        self.params, self.grads = [], []
-        self.mask = None
-
-    def forward(self, x):
-        self.mask = (x <= 0)
-        out = x.copy()
-        out[self.mask] = 0
-
-        return out
-
-    def backward(self, dout):
-        dout[self.mask] = 0
-        dx = dout
-
-        return dx
-
-
 class Sigmoid:
     def __init__(self):
         self.params, self.grads = [], []
@@ -119,8 +76,39 @@ class Sigmoid:
         return out
     
     def backward(self, dout):
-        dx = dout * (1.0 - self.out) * self.out
+        dx = self.out * (1.0 - self.out) * dout
         return dx
+
+
+class CrossEntropyLoss:
+    def __init__(self):
+        self.params, self.grads = [], []
+        self.y = None  # sigmoid의 출력
+        self.t = None  # 정답 데이터
+
+        self.pt = None
+        self.loss = None
+
+    def forward(self, y, t):
+        self.t = t
+        self.y = y
+
+        self.pt = np.where(self.t==1, y, 1-y)
+        self.out = -self.t * np.log(self.pt + 1e-7)
+
+        return np.mean(np.sum(self.out, axis=1))
+
+    def backward(self, dout=1):
+        dx = -(self.t / self.pt) * dout
+        return dx
+
+
+class BinaryCrossEntropyLoss:
+    pass
+
+
+class FocalLoss:
+    pass
 
 
 class SigmoidWithLoss:
@@ -131,10 +119,9 @@ class SigmoidWithLoss:
 
     def forward(self, x, t):
         self.t = t
-        self.y = 1 / (1 + np.exp(-x))
+        self.y = sigmoid(x)
 
         loss = cross_entropy_error(self.y, self.t)
-
         return loss
 
     def backward(self, dout=1):
@@ -143,17 +130,26 @@ class SigmoidWithLoss:
         dx = (self.y - self.t) * dout / batch_size
         return dx
 
-class BinaryCrossEntropyLoss:
-    def __init__(self):
+
+class Dropout:
+    """
+    http://arxiv.org/abs/1207.0580
+    """
+    def __init__(self, dropout_ratio=0.5):
         self.params, self.grads = [], []
-        self.y = None  # sigmoid의 출력
-        self.t = None  # 정답 데이터
+        self.dropout_ratio = dropout_ratio
+        self.mask = None
+        self.train_flag = True
 
-    def forward(self, x, t):
-        pass
+    def forward(self, x):
+        if self.train_flag:
+            self.mask = np.random.rand(*x.shape) > self.dropout_ratio
+            return x * self.mask
+        else:
+            return x * (1.0 - self.dropout_ratio)
 
-    def backward(self, dout=1):
-        pass
+    def backward(self, dout):
+        return dout * self.mask
 
 
 #################################### define model ####################################
@@ -215,20 +211,27 @@ class MultiLabelClassifier(BaseModel):
 
         # create layers
         self.layers = [
-            Affine(W1, b1),
-            Relu(),
-            Affine(W2, b2),
-            Relu(),
-            Affine(W3, b3),
-            Sigmoid()
+            Affine(W1, b1), Dropout(), Sigmoid(),
+            Affine(W2, b2), Dropout(), Sigmoid(),
+            Affine(W3, b3), Sigmoid()
         ]
-        self.loss_layer = BinaryCrossEntropyLoss()
+        self.dropout_layer = [self.layers[1], self.layers[4]]
+        self.loss_layer = CrossEntropyLoss()
 
         # collect params and grads
         self.params, self.grads = [], []
         for layer in self.layers:
             self.params += layer.params
             self.grads += layer.grads
+        
+    def set_train_flag(self, flag):
+        for layer in self.dropout_layer:
+            layer.train_flag = flag
+
+    def predict(self, xs):
+        for layer in self.layers:
+            xs = layer.forward(xs)
+        return sigmoid(xs)
 
     def forward(self, xs, ts):
         for layer in self.layers:
@@ -283,19 +286,16 @@ class Trainer:
     def __init__(self, model, optimizer):
         self.model = model
         self.optimizer = optimizer
-        self.loss_list = []
-        self.eval_interval = None
-        self.current_epoch = 0
 
-    def fit(self, x, t, max_epoch=10,
-            batch_size=32, max_grad=None, eval_interval=20):
+        self.train_loss_list = []
+        self.val_loss_list = []
+
+    def fit(self, x, t, x_val, t_val, max_epoch=10,
+            batch_size=32, max_grad=None):
         data_size = len(x)
         max_iters = data_size // batch_size
-        self.eval_interval = eval_interval
         model, optimizer = self.model, self.optimizer
-        total_loss = 0
-        loss_count = 0
-
+        
         start_time = time.time()
         for epoch in range(max_epoch):
             # 뒤섞기
@@ -308,33 +308,36 @@ class Trainer:
                 batch_t = t[iters*batch_size:(iters+1)*batch_size]
 
                 # 기울기 구해 매개변수 갱신
-                loss = model.forward(batch_x, batch_t)
+                model.forward(batch_x, batch_t)
                 model.backward()
                 # params, grads = remove_duplicate(model.params, model.grads)  # 공유된 가중치를 하나로 모음
                 # if max_grad is not None:
                 #     clip_grads(grads, max_grad)
                 optimizer.update(model.params, model.grads)
-                total_loss += loss
-                loss_count += 1
 
-                # 평가
-                if (eval_interval is not None) and (iters % eval_interval) == 0:
-                    avg_loss = total_loss / loss_count
-                    elapsed_time = time.time() - start_time
-                    print('| 에폭 %d |  반복 %d / %d | 시간 %d[s] | 손실 %.2f'
-                          % (self.current_epoch + 1, iters + 1, max_iters, elapsed_time, avg_loss))
-                    self.loss_list.append(float(avg_loss))
-                    total_loss, loss_count = 0, 0
+            # 평가
+            model.set_train_flag(False)
+            train_loss = model.forward(x, t)
+            val_loss = model.forward(x_val, t_val)
+            model.set_train_flag(True)
+            
+            self.train_loss_list.append(float(train_loss))
+            self.val_loss_list.append(float(val_loss))
+            
+            elapsed_time = time.time() - start_time            
 
-            self.current_epoch += 1
+            print('| epoch %3d | time %3d[s] | train loss %4.2f | val loss %4.2f'
+                    % (epoch + 1, elapsed_time, train_loss, val_loss))
 
     def plot(self, ylim=None):
-        x = np.arange(len(self.loss_list))
+        x = np.arange(len(self.train_loss_list))
         if ylim is not None:
             plt.ylim(*ylim)
-        plt.plot(x, self.loss_list, label='train')
-        plt.xlabel('Iterations (x' + str(self.eval_interval) + ')')
+        plt.plot(x, self.train_loss_list, label='train')
+        plt.plot(x, self.val_loss_list, label='val')
+        plt.xlabel('Epoch')
         plt.ylabel('Loss')
+        plt.legend()
         plt.show()
 
 
