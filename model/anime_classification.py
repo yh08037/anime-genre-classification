@@ -16,36 +16,35 @@ import pickle
 import time
 
 import numpy as np
+from numpy.random import gamma
 import pandas as pd
 import matplotlib.pyplot as plt
 
 
 ################################## define functions ##################################
 
-def cross_entropy_error(y, t):
-    assert t.size == y.size
-    return -np.mean(np.sum(t*np.log(y+1e-7), axis=1))
-
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))    
-
-def softmax(x):
-    if x.ndim == 2:
-        x = x - x.max(axis=1, keepdims=True)
-        x = np.exp(x)
-        x /= x.sum(axis=1, keepdims=True)
-    elif x.ndim == 1:
-        x = x - np.max(x)
-        x = np.exp(x) / np.sum(np.exp(x))
-    return x
 
 
 #################################### define layers ###################################
 
 class Affine:
-    def __init__(self, W, b):
-        self.params = [W, b]
-        self.grads = [np.zeros_like(W), np.zeros_like(b)]
+    def __init__(self, input_size, output_size, weight_init='xavier'):
+        self.name = f'Affine(input_size={input_size}, ' \
+                    + f'output_size={output_size}, ' \
+                    + f'weight_init={weight_init})'
+
+        if weight_init == 'xavier':
+            scale = np.sqrt(1.0 / input_size)
+        elif weight_init == 'he':
+            scale = np.sqrt(2.0 / input_size)
+
+        _W = scale * np.random.randn(input_size, output_size)
+        _b = np.zeros(output_size)
+
+        self.params = [_W, _b]
+        self.grads = [np.zeros_like(_W), np.zeros_like(_b)]
         self.x = None
         
     def forward(self, x):
@@ -65,8 +64,29 @@ class Affine:
         return dx
 
 
+class Relu:
+    def __init__(self):
+        self.name = 'Relu'
+
+        self.params, self.grads = [], []
+        self.mask = None
+
+    def forward(self, x):
+        self.mask = (x <= 0)
+        out = x.copy()
+        out[self.mask] = 0
+        return out
+
+    def backward(self, dout):
+        dout[self.mask] = 0
+        dx = dout
+        return dx
+
+
 class Sigmoid:
     def __init__(self):
+        self.name = 'Sigmoid'
+
         self.params, self.grads = [], []
         self.out = None
         
@@ -82,52 +102,59 @@ class Sigmoid:
 
 class CrossEntropyLoss:
     def __init__(self):
+        self.name = 'CrossEntropyLoss()'
+
         self.params, self.grads = [], []
-        self.y = None  # sigmoid의 출력
-        self.t = None  # 정답 데이터
-
-        self.pt = None
-        self.loss = None
-
-    def forward(self, y, t):
-        self.t = t
-        self.y = y
-
-        self.pt = np.where(self.t==1, y, 1-y)
-        self.out = -self.t * np.log(self.pt + 1e-7)
-
-        return np.mean(np.sum(self.out, axis=1))
-
-    def backward(self, dout=1):
-        dx = -(self.t / self.pt) * dout
-        return dx
-
-
-class BinaryCrossEntropyLoss:
-    pass
-
-
-class FocalLoss:
-    pass
-
-
-class SigmoidWithLoss:
-    def __init__(self):
-        self.params, self.grads = [], []
-        self.y = None  # sigmoid의 출력
-        self.t = None  # 정답 데이터
+        self.y = None  # output of sigmoid
+        self.t = None  # true value
+        self.pt = None # p_t from Focal Loss paper
 
     def forward(self, x, t):
         self.t = t
         self.y = sigmoid(x)
 
-        loss = cross_entropy_error(self.y, self.t)
+        self.pt = np.where(self.t==1, self.y, 1-self.y)
+        log = np.log(self.pt + 1e-7)
+
+        loss = np.mean(np.sum(-log, axis=1))
         return loss
 
     def backward(self, dout=1):
-        batch_size = self.t.shape[0]
+        sign = np.where(self.t==1, 1, -1)
+        dx = sign*(self.pt-1)*dout
+        return dx
 
-        dx = (self.y - self.t) * dout / batch_size
+
+class FocalLoss:
+    '''
+    https://arxiv.org/abs/1708.02002
+    '''
+    def __init__(self, gamma=2):
+        self.name = f'FocalLoss(gamma={gamma})'
+
+        self.params, self.grads = [], []
+        self.y = None  # output of sigmoid
+        self.t = None  # true value
+        
+        self.gamma = gamma # focusing parameter
+        self.pt  = None # p_t from Focal Loss paper
+        self.log = None # log(p_t)
+        self.mod = None # focal modulating factor
+
+    def forward(self, x, t):
+        self.t = t
+        self.y = sigmoid(x)
+
+        self.pt  = np.where(self.t==1, self.y, 1-self.y)
+        self.log = np.log(self.pt + 1e-7)
+        self.mod = (1-self.pt) ** self.gamma
+
+        loss = np.mean(np.sum(-self.mod*self.log, axis=1))
+        return loss
+
+    def backward(self, dout=1):
+        sign = np.where(self.t==1, 1, -1)
+        dx = sign*self.mod*(self.gamma*self.pt*self.log+self.pt-1)*dout
         return dx
 
 
@@ -136,6 +163,8 @@ class Dropout:
     http://arxiv.org/abs/1207.0580
     """
     def __init__(self, dropout_ratio=0.5):
+        self.name = f'Dropout(dropout_ratio={dropout_ratio})'
+
         self.params, self.grads = [], []
         self.dropout_ratio = dropout_ratio
         self.mask = None
@@ -152,6 +181,99 @@ class Dropout:
         return dout * self.mask
 
 
+class BatchNormalization:
+    """
+    http://arxiv.org/abs/1502.03167
+    """
+    def __init__(self, size_layer, momentum=0.9):
+        self.name = f'BatchNormalization(size_layer={size_layer})'
+
+        _gamma = np.ones(size_layer)
+        _beta = np.zeros(size_layer)
+
+        self.params = [_gamma, _beta]
+        self.grads = [np.zeros_like(_gamma), np.zeros_like(_beta)]
+        
+        self.momentum = momentum
+        self.input_shape = None # 합성곱 계층은 4차원, 완전연결 계층은 2차원  
+
+        # 시험할 때 사용할 평균과 분산
+        self.train_flag = True
+        self.running_mean = None
+        self.running_var = None  
+        
+        # backward 시에 사용할 중간 데이터
+        self.batch_size = None
+        self.xc = None
+        self.std = None
+
+    def forward(self, x):
+        self.input_shape = x.shape
+        if x.ndim != 2:
+            N, C, H, W = x.shape
+            x = x.reshape(N, -1)
+
+        out = self.__forward(x)
+        
+        return out.reshape(*self.input_shape)
+            
+    def __forward(self, x):
+        gamma, beta = self.params
+
+        if self.running_mean is None:
+            N, D = x.shape
+            self.running_mean = np.zeros(D)
+            self.running_var = np.zeros(D)
+                        
+        if self.train_flag:
+            mu = x.mean(axis=0)
+            xc = x - mu
+            var = np.mean(xc**2, axis=0)
+            std = np.sqrt(var + 10e-7)
+            xn = xc / std
+            
+            self.batch_size = x.shape[0]
+            self.xc = xc
+            self.xn = xn
+            self.std = std
+            self.running_mean = self.momentum * self.running_mean + (1-self.momentum) * mu
+            self.running_var = self.momentum * self.running_var + (1-self.momentum) * var            
+        else:
+            xc = x - self.running_mean
+            xn = xc / ((np.sqrt(self.running_var + 10e-7)))
+            
+        out = gamma * xn + beta 
+        return out
+
+    def backward(self, dout):
+        if dout.ndim != 2:
+            N, C, H, W = dout.shape
+            dout = dout.reshape(N, -1)
+
+        dx = self.__backward(dout)
+
+        dx = dx.reshape(*self.input_shape)
+        return dx
+
+    def __backward(self, dout):
+        gamma, _ = self.params
+
+        dbeta = dout.sum(axis=0)
+        dgamma = np.sum(self.xn * dout, axis=0)
+        dxn = gamma * dout
+        dxc = dxn / self.std
+        dstd = -np.sum((dxn * self.xc) / (self.std * self.std), axis=0)
+        dvar = 0.5 * dstd / self.std
+        dxc += (2.0 / self.batch_size) * self.xc * dvar
+        dmu = np.sum(dxc, axis=0)
+        dx = dxc - dmu / self.batch_size
+        
+        self.grads[0][...] = dgamma
+        self.grads[1][...] = dbeta
+        
+        return dx
+
+
 #################################### define model ####################################
 
 class BaseModel:
@@ -162,6 +284,9 @@ class BaseModel:
         raise NotImplementedError
 
     def backward(self, *args):
+        raise NotImplementedError
+    
+    def summary(self, *args):
         raise NotImplementedError
 
     def save_params(self, file_name=None):
@@ -197,26 +322,27 @@ class BaseModel:
 
 
 class MultiLabelClassifier(BaseModel):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, hidden_size_list, output_size,
+                 use_dropout=False, dropout_ratio=0.5, use_batchnorm=False):
         
-        # initialize weights
-        W1 = np.random.randn(input_size, 300)
-        b1 = np.zeros(300)
-
-        W2 = np.random.randn(300, 300)
-        b2 = np.zeros(300)
-
-        W3 = np.random.randn(300, output_size)
-        b3 = np.zeros(output_size)
-
         # create layers
-        self.layers = [
-            Affine(W1, b1), Dropout(), Sigmoid(),
-            Affine(W2, b2), Dropout(), Sigmoid(),
-            Affine(W3, b3), Sigmoid()
+        size_list = [input_size] + hidden_size_list
+        self.turn_off_list = []
+        self.layers = []
+        for i in range(len(size_list)-1):
+            self.layers += [Affine(size_list[i], size_list[i+1])]
+            if use_batchnorm:
+                self.turn_off_list.append(len(self.layers))
+                self.layers += [BatchNormalization(size_list[i+1])]
+            if use_dropout:
+                self.turn_off_list.append(len(self.layers))
+                self.layers += [Dropout(dropout_ratio)]
+            self.layers += [Sigmoid()]
+        self.layers += [
+            Affine(size_list[-1], output_size)
         ]
-        self.dropout_layer = [self.layers[1], self.layers[4]]
-        self.loss_layer = CrossEntropyLoss()
+        self.loss_layer = FocalLoss(gamma=0.5)
+        # self.loss_layer = CrossEntropyLoss()
 
         # collect params and grads
         self.params, self.grads = [], []
@@ -225,12 +351,14 @@ class MultiLabelClassifier(BaseModel):
             self.grads += layer.grads
         
     def set_train_flag(self, flag):
-        for layer in self.dropout_layer:
-            layer.train_flag = flag
+        for idx in self.turn_off_list:
+            self.layers[idx].train_flag = flag
 
     def predict(self, xs):
+        self.set_train_flag(False)
         for layer in self.layers:
             xs = layer.forward(xs)
+        self.set_train_flag(True)
         return sigmoid(xs)
 
     def forward(self, xs, ts):
@@ -244,6 +372,14 @@ class MultiLabelClassifier(BaseModel):
         for layer in reversed(self.layers):
             dout = layer.backward(dout)
         return dout
+    
+    def summary(self):
+        print('-'*60)
+        for layer in self.layers:
+            print(layer.name)
+            print('-'*60)
+        print(self.loss_layer.name)
+        print('-'*60)
 
 
 ################################## define optimizer ##################################
@@ -273,7 +409,7 @@ class Adam:
         self.iter += 1
         lr_t = self.lr * np.sqrt(1.0 - self.beta2**self.iter) / (1.0 - self.beta1**self.iter)
 
-        for i in  range(len(params)):
+        for i in range(len(params)):
             self.m[i] += (1 - self.beta1) * (grads[i] - self.m[i])
             self.v[i] += (1 - self.beta2) * (grads[i]**2 - self.v[i])
 
@@ -310,9 +446,6 @@ class Trainer:
                 # 기울기 구해 매개변수 갱신
                 model.forward(batch_x, batch_t)
                 model.backward()
-                # params, grads = remove_duplicate(model.params, model.grads)  # 공유된 가중치를 하나로 모음
-                # if max_grad is not None:
-                #     clip_grads(grads, max_grad)
                 optimizer.update(model.params, model.grads)
 
             # 평가
