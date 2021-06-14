@@ -16,7 +16,6 @@ import pickle
 import time
 
 import numpy as np
-from numpy.random import gamma
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -323,7 +322,8 @@ class BaseModel:
 
 class MultiLabelClassifier(BaseModel):
     def __init__(self, input_size, hidden_size_list, output_size,
-                 use_dropout=False, dropout_ratio=0.5, use_batchnorm=False):
+                 use_dropout=False, dropout_ratio=0.5, use_batchnorm=False,
+                 use_focal_loss=False, focal_gamma=2):
         
         # create layers
         size_list = [input_size] + hidden_size_list
@@ -334,15 +334,15 @@ class MultiLabelClassifier(BaseModel):
             if use_batchnorm:
                 self.turn_off_list.append(len(self.layers))
                 self.layers += [BatchNormalization(size_list[i+1])]
+            self.layers += [Sigmoid()]
             if use_dropout:
                 self.turn_off_list.append(len(self.layers))
                 self.layers += [Dropout(dropout_ratio)]
-            self.layers += [Sigmoid()]
-        self.layers += [
-            Affine(size_list[-1], output_size)
-        ]
-        self.loss_layer = FocalLoss(gamma=0.5)
-        # self.loss_layer = CrossEntropyLoss()
+        self.layers += [Affine(size_list[-1], output_size)]
+        if use_focal_loss:
+            self.loss_layer = FocalLoss(gamma=focal_gamma)
+        else:
+            self.loss_layer = CrossEntropyLoss()
 
         # collect params and grads
         self.params, self.grads = [], []
@@ -383,6 +383,19 @@ class MultiLabelClassifier(BaseModel):
 
 
 ################################## define optimizer ##################################
+
+class CosineAnnealingScheduler():
+    '''
+    https://arxiv.org/abs/1608.03983v5
+    '''
+    def __init__(self, period, lr_min, lr_max):
+        self.period = period
+        self.lr_min = lr_min
+        self.lr_max = lr_max
+
+    def next_lr(self):
+        return self.lr_min
+
 
 class Adam:
     '''
