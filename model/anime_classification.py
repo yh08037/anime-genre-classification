@@ -26,10 +26,27 @@ def sigmoid(x):
     return 1 / (1 + np.exp(-x))    
 
 
+def cross_entropy_error(y, t):
+    if y.ndim == 1:
+        t = t.reshape(1, t.size)
+        y = y.reshape(1, y.size)
+
+    # 정답 데이터가 원핫 벡터일 경우 정답 레이블 인덱스로 변환
+    if t.size == y.size:
+        t = t.argmax(axis=1)
+    
+    batch_size = y.shape[0]
+
+    cross_entropy = np.log(y[np.arange(batch_size), t] + 1e-7)
+    loss = -np.sum(cross_entropy) / batch_size
+    
+    return loss
+
+
 #################################### define layers ###################################
 
 class Affine:
-    def __init__(self, input_size, output_size, weight_init='xavier'):
+    def __init__(self, input_size, output_size, weight_init=None):
         self.name = f'Affine(input_size={input_size}, ' \
                     + f'output_size={output_size}, ' \
                     + f'weight_init={weight_init})'
@@ -38,6 +55,8 @@ class Affine:
             scale = np.sqrt(1.0 / input_size)
         elif weight_init == 'he':
             scale = np.sqrt(2.0 / input_size)
+        else:
+            scale = 1
 
         _W = scale * np.random.randn(input_size, output_size)
         _b = np.zeros(output_size)
@@ -65,7 +84,7 @@ class Affine:
 
 class Relu:
     def __init__(self):
-        self.name = 'Relu'
+        self.name = 'Relu()'
 
         self.params, self.grads = [], []
         self.mask = None
@@ -84,7 +103,7 @@ class Relu:
 
 class Sigmoid:
     def __init__(self):
-        self.name = 'Sigmoid'
+        self.name = 'Sigmoid()'
 
         self.params, self.grads = [], []
         self.out = None
@@ -96,6 +115,30 @@ class Sigmoid:
     
     def backward(self, dout):
         dx = self.out * (1.0 - self.out) * dout
+        return dx
+
+
+class SigmoidWithLoss:
+    def __init__(self):
+        self.name = 'SigmoidWithLoss()'
+
+        self.params, self.grads = [], []
+        self.loss = None
+        self.y = None  # sigmoid의 출력
+        self.t = None  # 정답 데이터
+
+    def forward(self, x, t):
+        self.t = t
+        self.y = sigmoid(x)
+
+        self.loss = cross_entropy_error(self.y, self.t)
+
+        return self.loss
+
+    def backward(self, dout=1):
+        batch_size = self.t.shape[0]
+
+        dx = (self.y - self.t) * dout / batch_size
         return dx
 
 
@@ -157,6 +200,29 @@ class FocalLoss:
         return dx
 
 
+
+class MSELoss:
+    '''
+    Mean Squared Error Loss
+    '''
+    def __init__(self):
+        self.name = 'MSELoss()'
+
+        self.params, self.grads = [], []
+        self.y = None
+        self.t = None
+    
+    def forward(self, x, t):
+        self.t = t
+        self.y = x
+
+        return np.mean(np.square(x - t))
+
+    def backward(self, dout=1):
+        dx = 2 * (self.y - self.t) / self.y.size
+        return dx
+
+
 class Dropout:
     """
     http://arxiv.org/abs/1207.0580
@@ -174,7 +240,8 @@ class Dropout:
             self.mask = np.random.rand(*x.shape) > self.dropout_ratio
             return x * self.mask
         else:
-            return x * (1.0 - self.dropout_ratio)
+            # return x * (1.0 - self.dropout_ratio)
+            return x
 
     def backward(self, dout):
         return dout * self.mask
@@ -330,15 +397,17 @@ class MultiLabelClassifier(BaseModel):
         self.turn_off_list = []
         self.layers = []
         for i in range(len(size_list)-1):
-            self.layers += [Affine(size_list[i], size_list[i+1])]
+            # self.layers += [Affine(size_list[i], size_list[i+1], 'xavier')]
+            self.layers += [Affine(size_list[i], size_list[i+1], 'he')]
             if use_batchnorm:
                 self.turn_off_list.append(len(self.layers))
                 self.layers += [BatchNormalization(size_list[i+1])]
-            self.layers += [Sigmoid()]
+            # self.layers += [Sigmoid()]
+            self.layers += [Relu()]
             if use_dropout:
                 self.turn_off_list.append(len(self.layers))
                 self.layers += [Dropout(dropout_ratio)]
-        self.layers += [Affine(size_list[-1], output_size)]
+        self.layers += [Affine(size_list[-1], output_size, 'xavier')]
         if use_focal_loss:
             self.loss_layer = FocalLoss(gamma=focal_gamma)
         else:
@@ -489,4 +558,14 @@ class Trainer:
 
 
 if __name__ == '__main__':
-    pass
+    mse = MSELoss()
+
+    x = np.random.rand(100, 10)
+    t = np.random.randint(2, size=(100, 1))
+
+    loss = mse.forward(x, t)
+ 
+    print(loss)
+
+    print(x.max(), x.min(), t.max(), t.min())
+

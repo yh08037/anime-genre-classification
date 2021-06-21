@@ -374,6 +374,7 @@ MAL_ID,Name,Type
 505,Fushigiboshi no☆Futagohime,TV
 507,Gravitation: Lyrics of Love,OVA
 508,Tottoko Hamtarou,TV
+510,Kakyuusei 2: Hitomi no Naka no Shoujo-tachi,TV
 511,Kidou Shinsengumi Moeyo Ken TV,TV
 512,Majo no Takkyuubin,Movie
 513,Tenkuu no Shiro Laputa,Movie
@@ -1198,7 +1199,6 @@ MAL_ID,Name,Type
 1746,Zoids Fuzors,TV
 1747,Freedom,OVA
 1749,Amaenaide yo!!: Yasumanaide yo!!,Special
-1750,Amaenaide yo!! Katsu!!: Damasarenaide yo!!,Special
 1751,Jikuu Bouken Nuumamonjaa,OVA
 1752,Di Gi Charat: Hoshi no Tabi,Movie
 1758,Di Gi Charat Tsuyu Specials,Special
@@ -1206,6 +1206,7 @@ MAL_ID,Name,Type
 1760,Golgo 13,Movie
 1761,Golgo 13: Queen Bee,OVA
 1762,Arslan Senki,OVA
+1764,Slam Dunk (Movie),Movie
 1766,Youseiki Suikoden,OVA
 1767,Psycho Diver: Mashou Bosatsu,OVA
 1768,Kikaider 01 The Animation,OVA
@@ -1534,6 +1535,7 @@ MAL_ID,Name,Type
 2261,Malice@Doll,OVA
 2262,Sin: The Movie,OVA
 2263,Sonic★the★Hedgehog,OVA
+2272,Mahou no Princess Minky Momo: Yume no Naka no Rondo,OVA
 2273,Mobile Suit Gundam Wing: Endless Waltz Movie,Movie
 2275,Saishuu Chikan Densha,OVA
 2276,Shin Saishuu Chikan Densha,OVA
@@ -1965,6 +1967,7 @@ MAL_ID,Name,Type
 3043,Andersen Douwa: Ningyohime,Movie
 3044,Tetsuwan Atom (1980),TV
 3046,Shiroki Tenshi-tachi no Rondo,OVA
+3048,In no Houteishiki,OVA
 3050,Panchira Teacher,OVA
 3051,Yes! Precure 5 Movie: Kagami no Kuni no Miracle Daibouken!,Movie
 3053,Ganbare! Kickers,TV
@@ -2019,6 +2022,7 @@ MAL_ID,Name,Type
 3166,Ayakashi,TV
 3171,Ryoujoku Hitozuma Onsen,OVA
 3175,Kaitei Choutokkyuu: Marine Express,Special
+3176,Nessa no Haou Gandalla,TV
 3180,Manga Aesop Monogatari (TV),TV
 3183,MAPS: Densetsu no Samayoeru Seijin-tachi,Movie
 3185,Fortune Quest L,TV
@@ -2201,6 +2205,7 @@ MAL_ID,Name,Type
 3625,Battle Royal High School,OVA
 3628,Ingoku Byoutou,OVA
 3630,Miracle Shoujo Limit-chan,TV
+3633,Angel,OVA
 3635,Advancer Tina,OVA
 3638,Kaiketsu Zorori,TV
 3639,Princess Road: Bara to Dokuro no Monshou,OVA
@@ -2862,7 +2867,6 @@ MAL_ID,Name,Type
 6202,Daisetsusan no Yuusha Kibaou,Special
 6203,Sasameki Koto,TV
 6205,Kämpfer,TV
-6209,Macross 7 Plus,Special
 6211,Tokyo Magnitude 8.0,TV
 6213,Toaru Kagaku no Railgun,TV
 6217,Crayon Shin-chan Movie 03: Unkokusai no Yabou,Movie
@@ -2950,7 +2954,6 @@ MAL_ID,Name,Type
 6718,Yamato 2520,OVA
 6727,Mechakko Dotakon,TV
 6730,Tonde Mon Pe,TV
-6736,Mouryou no Hako: Chuuzenji Atsuko no Jikenbo - Hako no Yurei no Koto,Special
 6746,Durarara!!,TV
 6758,Tatakau Shisho: The Book of Bantorra,TV
 6771,Dorimogu Daa!!,TV
@@ -3014,7 +3017,6 @@ MAL_ID,Name,Type
 7066,Mahoromatic: Tadaima Okaeri,Special
 7079,Ookamikakushi,TV
 7081,Danball Senki,TV
-7083,Hakushaku to Yousei Specials,Special
 7088,Ichiban Ushiro no Daimaou,TV
 7106,Ougon Senshi Gold Lightan,TV
 7109,Gyouten Ningen Batsealer,TV
@@ -3404,7 +3406,6 @@ MAL_ID,Name,Type
 9925,Amagami SS: Tachibana Miya-hen - Imouto,Special
 9934,Nekogami Yaoyorozu,TV
 9935,Chocolat no Mahou,OVA
-9940,Mai no Mahou to Katei no Hi,Special
 9944,Hime Gal♥Paradise,OVA
 9948,Wo Wei Ge Kuang,TV
 9949,Fuwa Aoyun Manyouji,TV
@@ -5369,7 +5370,6 @@ MAL_ID,Name,Type
 36990,Non Non Biyori Movie: Vacation,Movie
 36992,Tomie,Special
 36993,Chao Zhi Neng Zu Qiu,TV
-37002,Uchi no Oochopus,TV
 37007,Hinomaruzumou,TV
 37023,Layton Mystery Tanteisha: Katri no Nazotoki File,TV
 37036,Binan Koukou Chikyuu Boueibu Happy Kiss!,TV
