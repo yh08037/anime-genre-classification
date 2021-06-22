@@ -1,4 +1,9 @@
-# coding: utf-8
+# ID: 2018115809 (undergraduate)
+# NAME: Dohun Kim
+# File name: ptb.py
+# Platform: Python 3.9.5 on Ubuntu Linux 18.04
+# Required Package(s): numpy=1.20.3
+
 import sys
 import os
 sys.path.append('..')
